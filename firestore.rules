@@ -1,0 +1,133 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Test doc for connection check (from skill testConnection)
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.keys().hasAll(['email', 'displayName', 'role'])
+          && data.keys().hasOnly(['email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+          && data.email is string && data.email.size() <= 256
+          && data.displayName is string && data.displayName.size() <= 128
+          && data.role in ['instructor'];
+      }
+
+      allow get: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming())
+        && incoming().role == existing().role;
+      allow delete: if false;
+    }
+
+    // Courses collection
+    match /courses/{courseId} {
+      function isValidCourse(data) {
+        return data.keys().hasAll(['code', 'name', 'section', 'semester', 'instructorId'])
+          && data.keys().hasOnly(['code', 'name', 'section', 'semester', 'instructorId', 'totalSessions', 'createdAt', 'updatedAt'])
+          && data.code is string && data.code.size() <= 32
+          && data.name is string && data.name.size() <= 128
+          && data.section is string && data.section.size() <= 32
+          && data.semester is string && data.semester.size() <= 32
+          && data.instructorId == request.auth.uid;
+      }
+
+      allow get: if isSignedIn() && isValidId(courseId) && existing().instructorId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.instructorId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(courseId) && isValidCourse(incoming());
+      allow update: if isSignedIn() && isValidId(courseId) && isValidCourse(incoming())
+        && incoming().instructorId == existing().instructorId;
+      allow delete: if isSignedIn() && isValidId(courseId) && existing().instructorId == request.auth.uid;
+    }
+
+    // Students collection
+    match /students/{studentId} {
+      function isValidStudent(data) {
+        return data.keys().hasAll(['courseId', 'studentCode', 'fullName', 'instructorId'])
+          && data.keys().hasOnly(['courseId', 'studentCode', 'fullName', 'nickname', 'email', 'instructorId', 'createdAt', 'updatedAt'])
+          && data.courseId is string && data.courseId.size() <= 128
+          && data.studentCode is string && data.studentCode.size() <= 32
+          && data.fullName is string && data.fullName.size() <= 128
+          && (!('nickname' in data) || (data.nickname is string && data.nickname.size() <= 64))
+          && (!('email' in data) || (data.email is string && data.email.size() <= 128))
+          && data.instructorId == request.auth.uid;
+      }
+
+      allow get: if isSignedIn() && isValidId(studentId) && existing().instructorId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.instructorId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(studentId) && isValidStudent(incoming());
+      allow update: if isSignedIn() && isValidId(studentId) && isValidStudent(incoming())
+        && incoming().instructorId == existing().instructorId;
+      allow delete: if isSignedIn() && isValidId(studentId) && existing().instructorId == request.auth.uid;
+    }
+
+    // Sessions collection
+    match /sessions/{sessionId} {
+      function isValidSession(data) {
+        return data.keys().hasAll(['courseId', 'instructorId', 'weekNumber', 'date', 'title'])
+          && data.keys().hasOnly(['courseId', 'instructorId', 'weekNumber', 'date', 'title', 'createdAt', 'updatedAt'])
+          && data.courseId is string && data.courseId.size() <= 128
+          && data.weekNumber is number && data.weekNumber >= 1 && data.weekNumber <= 52
+          && data.date is string && data.date.size() <= 32
+          && data.title is string && data.title.size() <= 200
+          && data.instructorId == request.auth.uid;
+      }
+
+      allow get: if isSignedIn() && isValidId(sessionId) && existing().instructorId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.instructorId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(sessionId) && isValidSession(incoming());
+      allow update: if isSignedIn() && isValidId(sessionId) && isValidSession(incoming())
+        && incoming().instructorId == existing().instructorId;
+      allow delete: if isSignedIn() && isValidId(sessionId) && existing().instructorId == request.auth.uid;
+    }
+
+    // Attendance records collection
+    match /attendance/{attendanceId} {
+      function isValidAttendance(data) {
+        return data.keys().hasAll(['courseId', 'sessionId', 'studentId', 'studentCode', 'instructorId', 'status', 'participationScore'])
+          && data.keys().hasOnly(['courseId', 'sessionId', 'studentId', 'studentCode', 'instructorId', 'status', 'participationScore', 'note', 'updatedAt', 'createdAt'])
+          && data.courseId is string && data.courseId.size() <= 128
+          && data.sessionId is string && data.sessionId.size() <= 128
+          && data.studentId is string && data.studentId.size() <= 128
+          && data.studentCode is string && data.studentCode.size() <= 32
+          && data.status in ['present', 'absent', 'leave']
+          && data.participationScore is number && data.participationScore >= 0 && data.participationScore <= 3
+          && (!('note' in data) || (data.note is string && data.note.size() <= 500))
+          && data.instructorId == request.auth.uid;
+      }
+
+      allow get: if isSignedIn() && isValidId(attendanceId) && existing().instructorId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.instructorId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming());
+      allow update: if isSignedIn() && isValidId(attendanceId) && isValidAttendance(incoming())
+        && incoming().instructorId == existing().instructorId;
+      allow delete: if isSignedIn() && isValidId(attendanceId) && existing().instructorId == request.auth.uid;
+    }
+  }
+}

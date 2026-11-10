@@ -1,0 +1,6 @@
+{
+  "name": "ClassPulse - ระบบเช็กชื่อและการมีส่วนร่วม",
+  "description": "เว็บแอปเช็กชื่อและบันทึกการมีส่วนร่วมในชั้นเรียน วิเคราะห์ความเสี่ยงการขาดเรียน และติดตามแนวโน้มการเข้าเรียน",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
